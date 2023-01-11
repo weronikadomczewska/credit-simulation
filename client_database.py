@@ -24,7 +24,8 @@ class ClientDatabase:
         self.maintenance_cost_distribution = maintenance_cost_distribution
 
     def choose_maintenance_cost(self):
-        '''
+
+        """
         Funkcja wybiera koszty utrzymania klienta (chosen_maintenance_cost) ze zbioru liczb uzyskanych z
         podanego rozkładu (normalnego, jednostajnego lub gamma).
         Parametry rozkładów wzięte z danych statystycznych dla życia na średnim poziomie.
@@ -32,8 +33,7 @@ class ClientDatabase:
         Rozkład jednostajny: dolna granica 1404 zł, górna granica 3230 zł (średnia +- odchylenie std.)
         Rozkład gamma: shape: pierwiastek ze średniej, scale: odchylenie standardowe / pierwiastek ze średniej
 
-        '''
-
+        """
         mean = 2317
         standard_deviation = 913
         lower = 1404
@@ -52,14 +52,15 @@ class ClientDatabase:
         return chosen_maintenance_cost
 
     def prepare_entry_data(self, datasource: str):
-        '''
+
+        """
         Funkcja pobiera dane z pliku credit.csv, który zawiera dane klienta: wiek (age), wysokość pożyczki (amount) oraz
         okres kredytowania w miesiącach (month_loan_duration).
         Zarobki brutto klienta są losowane z rozkładu normalnego o parametrach średnia: 6857 zł, odchylenie std. 1200 zł
         Zarobki netto klienta są wyliczane na podstawie podanych w prawie stawekw podatkowych (17% lub 32%).
         Celem jest przygotowanie danych klienta na potrzeby podjęcia decyzji, czy przyznajemy pożyczkę
-        '''
 
+        """
         data_list = []
         with open(datasource, newline="") as csvfile:
             data = csv.reader(csvfile)
@@ -73,8 +74,8 @@ class ClientDatabase:
 
         # przeglądam dane; client_data to dane potencjalnego klienta na początku spłacania kredytu
         for client_data in data_list:
-            chosen_client_data = {"months_loan_duration": client_data["months_loan_duration"],
-                                  "amount": client_data["amount"], "age": client_data["age"],
+            chosen_client_data = {"months_loan_duration": int(client_data["months_loan_duration"]),
+                                  "amount": int(client_data["amount"]), "age": int(client_data["age"]),
                                   "earnings_brutto": round(random.choice(
                                       np.random.normal(earnings_mean, earnings_std_deviation, self.number_of_clients)))}
 
@@ -95,7 +96,3 @@ class ClientDatabase:
             self.clients.append(chosen_client_data)
         return self.clients
 
-
-if __name__ == "__main__":
-    cdb = ClientDatabase(100, "normal")
-    print(cdb.prepare_entry_data("data/credit.csv"))
