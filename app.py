@@ -55,10 +55,10 @@ class Simulation:
                 np.random.normal(mean, standard_deviation, self.number_of_clients)), 2)
         elif self.maintenance_cost_distribution.lower() == "uniform":
             chosen_maintenance_cost = round(random.choice(
-                np.random.normal(lower, upper, self.number_of_clients)), 2)
+                np.random.uniform(lower, upper, self.number_of_clients)), 2)
         else:
             chosen_maintenance_cost = round(random.choice(
-                np.random.normal(shape, scale, self.number_of_clients)), 2)
+                np.random.gamma(shape, scale, self.number_of_clients)), 2)
         return chosen_maintenance_cost
 
     def calc_loan_installment(self, amount, months_loan_duration, interest_rate: float):
@@ -84,6 +84,13 @@ class Simulation:
                 data["loan_installment"] = loan_installment
                 chosen_clients.append(data)
         return chosen_clients
+
+    def calc_bank_income(self, client_data):
+        """
+        :param client_data: dane klienta w danym miesiącu
+        :return: zysk banku od danego klienta w danym miesiącu
+        """
+        return round(client_data["amount"] * self.bank_margin/100, 2)
 
     def calc_possible_interest_rates(self, longest_months_loan_duration):
         """
@@ -134,7 +141,7 @@ class Simulation:
         """
         longest_months_loan_duration = max(client["months_loan_duration"] for client in chosen_clients_data)
         bankrupts = 0
-        bank_income = 0
+        bank_incomes = np.zeros(longest_months_loan_duration+1)
         client_infos = []
         possible_interest_rates = self.calc_possible_interest_rates(longest_months_loan_duration)
         for client_data in chosen_clients_data:
@@ -146,13 +153,15 @@ class Simulation:
             for month in range(1, months_loan_duration+1):
                 interest_rate = possible_interest_rates[month]
                 new_client_data = self.simulate_single_client_month(client_data, interest_rate)
+                loan_repayment_process_info.append(new_client_data)
+                bank_incomes[month] += self.calc_bank_income(client_data)
                 if new_client_data["is_bankrupt"]:
                     is_bankrupt = True
-                loan_repayment_process_info.append(new_client_data)
+                    bank_incomes[month] -= self.calc_bank_income(client_data)
+                    break
             if is_bankrupt:
                 bankrupts += 1
             client_infos.append(loan_repayment_process_info)
-
         return bankrupts
 
     def simulate2(self, chosen_clients_data: list[dict]):
@@ -165,8 +174,8 @@ class Simulation:
         """
         longest_months_loan_duration = max(client["months_loan_duration"] for client in chosen_clients_data)
         bankrupts = 0
-        bank_income = 0
         client_infos = []
+        bank_incomes = np.zeros(longest_months_loan_duration + 1)
         # losuję tyle możliwych zmian stóp procentowych, ile najdłuższy okres kredytowania wśród klientów
         possible_interest_rates = self.calc_possible_interest_rates(longest_months_loan_duration)
         for client_data in chosen_clients_data:
@@ -187,7 +196,10 @@ class Simulation:
                     unpaid_installments += 1
                     if unpaid_installments == 3:
                         is_bankrupt = True
+                        bank_incomes[month] -= self.calc_bank_income(client_data)
+                        break
                 loan_repayment_process_info.append(new_client_data)
+                bank_incomes[month] += self.calc_bank_income(client_data)
             client_infos.append(loan_repayment_process_info)
             if is_bankrupt:
                 bankrupts += 1
@@ -197,7 +209,7 @@ class Simulation:
 if __name__ == "__main__":
     DATAPATH = "data/credit.csv"
     number_of_clients = 1000
-    maintenance_cost_distribution = "normal"
+    maintenance_cost_distribution = "uniform"
     interest_rate_distribution = "uniform"
     bank_margin = 6.0
     beginning_interest_rate = 6.5
@@ -239,5 +251,5 @@ if __name__ == "__main__":
     print(f"chosen clients data: {len(chosen_clients_data)}")
     print("------")
     print(f"bankrupts (1st way): {simulation.simulate(chosen_clients_data)}")
-    # print("------")
+    print("------")
     print(f"bankrupts (2nd way): {simulation.simulate2(chosen_clients_data)}")

@@ -71,9 +71,6 @@ class ClientDatabase:
             else:
                 chosen_client_data["earnings_netto"] = round(
                     chosen_client_data["earnings_brutto"] - chosen_client_data["earnings_brutto"] * 0.32, 2)
-            # pytanie - dlaczego dla rozkładu uniform i normal wychodzą wartości ujemne mimo podanych parametrów?
-            # pytanie - dlaczego dla rozkładu gamma wychodzą bardzo małe wartości (od około 10 do 100)?
-            # jak wyznaczyć parametry tego rozkładu?
             chosen_client_data["maintenance_cost"] = abs(self.choose_maintenance_cost())
             # na początku symulacji żaden klient nie jest bankrutem
             chosen_client_data["is_bankrupt"] = False
