@@ -30,10 +30,10 @@ class ClientDatabase:
                 np.random.normal(mean, standard_deviation, self.number_of_clients)), 2)
         elif self.maintenance_cost_distribution.lower() == "uniform":
             chosen_maintenance_cost = round(random.choice(
-                np.random.normal(lower, upper, self.number_of_clients)), 2)
+                np.random.uniform(lower, upper, self.number_of_clients)), 2)
         else:
             chosen_maintenance_cost = round(random.choice(
-                np.random.normal(shape, scale, self.number_of_clients)), 2)
+                np.random.gamma(shape, scale, self.number_of_clients)), 2)
         return chosen_maintenance_cost
 
     def prepare_entry_data(self, datasource: str, number_of_clients: int):

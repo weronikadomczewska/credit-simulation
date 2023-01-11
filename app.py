@@ -85,13 +85,29 @@ class Simulation:
                 chosen_clients.append(data)
         return chosen_clients
 
-    @staticmethod
-    def toss_a_coin():
+    def calc_possible_interest_rates(self, longest_months_loan_duration):
         """
-        :return: wartość 0 lub 1
-        Funkcja decyduje o tym, czy zmieniamy stopy procentowe w danym miesiącu
+        Funkcja losuje tyle możliwych zmian stóp procentowych, ile najdłuższy okres kredytowania wśród klientów
+        stopy procentowe są losowane z wybranego przez użytkownika rozkładu
+        parametry rozkładów:
+        - jednostajny: wartość namniejsza 0%, wartość największa 18%
+        - normalny: średnia 7.38%, odchylenie std. 5.7%
+        - gamma: shape: pierwiastek ze średniej, scale: odchylenie standardowe / pierwiastek ze średniej
         """
-        return random.choice([0, 1])
+        mean = 7.38
+        standard_deviation = 5.7
+        lower = 0.0
+        upper = 18.0
+        shape = round(mean ** (1 / 2), 2)
+        scale = shape
+        if self.interest_rate_distribution == "uniform":
+            possible_interest_rates = np.random.uniform(lower, upper, longest_months_loan_duration + 1)
+        elif self.interest_rate_distribution == "normal":
+            possible_interest_rates = np.random.normal(mean, standard_deviation, longest_months_loan_duration + 1)
+        else:
+            possible_interest_rates = np.random.gamma(shape, scale, longest_months_loan_duration + 1)
+
+        return possible_interest_rates
 
     def simulate_single_client_month(self, client_data: dict, interest_rate: float):
         """
@@ -120,19 +136,15 @@ class Simulation:
         bankrupts = 0
         bank_income = 0
         client_infos = []
-        # losuję tyle możliwych zmian stóp procentowych, ile najdłuższy okres kredytowania wśród klientów
-        possible_interest_rate_changes = [round(random.uniform(-1.0, 10.0), 2) for x in range(longest_months_loan_duration)]
+        possible_interest_rates = self.calc_possible_interest_rates(longest_months_loan_duration)
         for client_data in chosen_clients_data:
             months_loan_duration = client_data["months_loan_duration"]
             # informacje o kliencie w każdym miesiącu spłaty
             loan_repayment_process_info = []
             # zakładamy na początku, że klient nie jest bankrutem
             is_bankrupt = False
-            for month in range(months_loan_duration):
-                interest_rate = self.interest_rate
-                # gdy funkcja wylosuje 1 zmieniamy stopę procentową w danym miesiącu, w przeciwnym razie nie zmieniamy
-                if self.toss_a_coin():
-                    interest_rate += random.choice(possible_interest_rate_changes)
+            for month in range(1, months_loan_duration+1):
+                interest_rate = possible_interest_rates[month]
                 new_client_data = self.simulate_single_client_month(client_data, interest_rate)
                 if new_client_data["is_bankrupt"]:
                     is_bankrupt = True
@@ -156,7 +168,7 @@ class Simulation:
         bank_income = 0
         client_infos = []
         # losuję tyle możliwych zmian stóp procentowych, ile najdłuższy okres kredytowania wśród klientów
-        possible_interest_rate_changes = [round(random.uniform(-1.0, 10.0), 2) for x in range(longest_months_loan_duration)]
+        possible_interest_rates = self.calc_possible_interest_rates(longest_months_loan_duration)
         for client_data in chosen_clients_data:
             months_loan_duration = client_data["months_loan_duration"]
             # informacje o kliencie w każdym miesiącu spłaty
@@ -165,11 +177,8 @@ class Simulation:
             is_bankrupt = False
             # zliczamy niezapłacone raty
             unpaid_installments = 0
-            for month in range(months_loan_duration):
-                interest_rate = self.interest_rate
-                # gdy funkcja wylosuje 1 zmieniamy stopę procentową w danym miesiącu, w przeciwnym razie nie zmieniamy
-                if self.toss_a_coin():
-                    interest_rate += random.choice(possible_interest_rate_changes)
+            for month in range(1, months_loan_duration+1):
+                interest_rate = possible_interest_rates[month]
                 # gdy klient nie zapłacił raty raz lub dwa, dostaje ratę z odsetkami 10%
                 if unpaid_installments == 1 or unpaid_installments == 2:
                     interest_rate += interest_rate * 0.1
@@ -189,7 +198,7 @@ if __name__ == "__main__":
     DATAPATH = "data/credit.csv"
     number_of_clients = 1000
     maintenance_cost_distribution = "normal"
-    interest_rate_distribution = "gamma"
+    interest_rate_distribution = "uniform"
     bank_margin = 6.0
     beginning_interest_rate = 6.5
     # while number_of_clients is None:
@@ -224,7 +233,7 @@ if __name__ == "__main__":
     simulation = Simulation(interest_rate_distribution, maintenance_cost_distribution, bank_margin,
                             beginning_interest_rate, number_of_clients)
     possible_clients_data = cdb.prepare_entry_data(DATAPATH, number_of_clients)
-    print(f"possible clients data: {possible_clients_data}")
+    print(f"possible clients data: {len(possible_clients_data)}")
     print("------")
     chosen_clients_data = simulation.choose_clients(possible_clients_data)
     print(f"chosen clients data: {len(chosen_clients_data)}")
