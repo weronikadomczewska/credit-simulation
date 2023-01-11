@@ -3,19 +3,6 @@ import random
 import numpy as np
 
 
-# class Client:
-#     def __init__(self, maintenance_cost_distribution: str):
-#         self.amount = 0
-#         self.age = 0
-#         self.months_loan_duration = 0
-#         self.is_bankrupt = False
-#         self.maintenance_cost = 0
-#         self.maintenance_cost_distribution = maintenance_cost_distribution
-#         self.earnings_brutto = 0
-#
-#     def __repr__(self):
-#         return self.__dict__
-
 class ClientDatabase:
 
     def __init__(self, number_of_clients: int, maintenance_cost_distribution: str):
@@ -24,7 +11,6 @@ class ClientDatabase:
         self.maintenance_cost_distribution = maintenance_cost_distribution
 
     def choose_maintenance_cost(self):
-
         """
         Funkcja wybiera koszty utrzymania klienta (chosen_maintenance_cost) ze zbioru liczb uzyskanych z
         podanego rozkładu (normalnego, jednostajnego lub gamma).
@@ -32,7 +18,6 @@ class ClientDatabase:
         Rozład normalny: średnia 2317 zł, odchylenie std. 913 zł
         Rozkład jednostajny: dolna granica 1404 zł, górna granica 3230 zł (średnia +- odchylenie std.)
         Rozkład gamma: shape: pierwiastek ze średniej, scale: odchylenie standardowe / pierwiastek ze średniej
-
         """
         mean = 2317
         standard_deviation = 913
@@ -51,8 +36,7 @@ class ClientDatabase:
                 np.random.normal(shape, scale, self.number_of_clients)), 2)
         return chosen_maintenance_cost
 
-    def prepare_entry_data(self, datasource: str):
-
+    def prepare_entry_data(self, datasource: str, number_of_clients: int):
         """
         Funkcja pobiera dane z pliku credit.csv, który zawiera dane klienta: wiek (age), wysokość pożyczki (amount) oraz
         okres kredytowania w miesiącach (month_loan_duration).
@@ -70,7 +54,7 @@ class ClientDatabase:
                 data_list.append(row_dict)
 
         earnings_mean = 6857
-        earnings_std_deviation = 1200
+        earnings_std_deviation = 2000
 
         # przeglądam dane; client_data to dane potencjalnego klienta na początku spłacania kredytu
         for client_data in data_list:
@@ -92,7 +76,7 @@ class ClientDatabase:
             # jak wyznaczyć parametry tego rozkładu?
             chosen_client_data["maintenance_cost"] = abs(self.choose_maintenance_cost())
             # na początku symulacji żaden klient nie jest bankrutem
-            chosen_client_data["is_bankcrupt"] = False
+            chosen_client_data["is_bankrupt"] = False
             self.clients.append(chosen_client_data)
-        return self.clients
+        return [random.choice(self.clients) for x in range(number_of_clients)]
 

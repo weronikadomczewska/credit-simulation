@@ -1,4 +1,5 @@
 from client_database import *
+from copy import deepcopy
 
 
 class Simulation:
@@ -9,10 +10,14 @@ class Simulation:
     interest_rate - stopa procentowa na moment podejmowania decyzji kredytowej
     """
 
-    def __init__(self, interest_rate_distribution: str, bank_margin: float, interest_rate: float):
+    def __init__(self, interest_rate_distribution: str, maintenance_cost_distribution: str,
+                 bank_margin: float, interest_rate: float, number_of_clients: int):
         self.interest_rate_distribution = interest_rate_distribution
         self.bank_margin = bank_margin
         self.interest_rate = interest_rate
+        self.maintenance_cost_distribution = maintenance_cost_distribution
+        self.number_of_clients = number_of_clients
+
 
     def check(self, age: int, months_loan_duration: int, amount: int,
               earnings_netto: float, maintenance_cost: float):
@@ -25,12 +30,46 @@ class Simulation:
         Funkcja zwraca 1, gdy klient o dnaych parametrach spełnia warunki i 0 w przeciwnym razie
         """
 
-        loan_installment = round(((amount * (1 + self.bank_margin/100)**(months_loan_duration/12) +
-                            (amount * (1 + self.interest_rate/100)**(months_loan_duration/12))))/months_loan_duration, 2)
-        # print(f"Calculated loan installment (while making decision): {loan_installment}")
-        if age + round((months_loan_duration / 12), 2) > 65 or (earnings_netto - maintenance_cost)/2 >= loan_installment:
+        loan_installment = self.calc_loan_installment(amount, months_loan_duration, self.interest_rate)
+        if age + round((months_loan_duration / 12), 2) > 65 or (earnings_netto - maintenance_cost)/2 <= loan_installment:
             return 0
         return 1
+
+    def choose_maintenance_cost(self):
+        """
+        Funkcja wybiera koszty utrzymania klienta (chosen_maintenance_cost) ze zbioru liczb uzyskanych z
+        podanego rozkładu (normalnego, jednostajnego lub gamma).
+        Parametry rozkładów wzięte z danych statystycznych dla życia na średnim poziomie.
+        Rozład normalny: średnia 2317 zł, odchylenie std. 913 zł
+        Rozkład jednostajny: dolna granica 1404 zł, górna granica 3230 zł (średnia +- odchylenie std.)
+        Rozkład gamma: shape: pierwiastek ze średniej, scale: odchylenie standardowe / pierwiastek ze średniej
+        """
+        mean = 2317
+        standard_deviation = 913
+        lower = 1404
+        upper = 3230
+        shape = round(mean ** (1/2), 2)
+        scale = shape
+        if self.maintenance_cost_distribution.lower() == "normal":
+            chosen_maintenance_cost = round(random.choice(
+                np.random.normal(mean, standard_deviation, self.number_of_clients)), 2)
+        elif self.maintenance_cost_distribution.lower() == "uniform":
+            chosen_maintenance_cost = round(random.choice(
+                np.random.normal(lower, upper, self.number_of_clients)), 2)
+        else:
+            chosen_maintenance_cost = round(random.choice(
+                np.random.normal(shape, scale, self.number_of_clients)), 2)
+        return chosen_maintenance_cost
+
+    def calc_loan_installment(self, amount, months_loan_duration, interest_rate: float):
+        """
+        :param amount: wysokość pożyczki
+        :param months_loan_duration: okres kredytowania (w miesiącach)
+        :param interest_rate: aktualna stopa procentowa
+        :return: kwota raty w danym miesiącu
+        """
+        return round(((amount * (1 + self.bank_margin/100)**(months_loan_duration/12) +
+                            (amount * (1 + interest_rate/100)**(months_loan_duration/12))))/months_loan_duration, 2)
 
     def choose_clients(self, clients_data: list[dict]):
         """
@@ -40,21 +79,119 @@ class Simulation:
         for data in clients_data:
             if self.check(data["age"], data["months_loan_duration"],
                           data["amount"], data["earnings_netto"], data["maintenance_cost"]):
-                loan_installment = round(((data["amount"] * (1 + self.bank_margin / 100) ** (data["months_loan_duration"] / 12) +
-                                           (data["amount"] * (1 + self.interest_rate / 100) ** (
-                                                   data["months_loan_duration"] / 12)))) / data["months_loan_duration"], 2)
+                loan_installment = self.calc_loan_installment(data["amount"],
+                                                              data["months_loan_duration"], self.interest_rate)
                 data["loan_installment"] = loan_installment
                 chosen_clients.append(data)
         return chosen_clients
 
+    @staticmethod
+    def toss_a_coin():
+        """
+        :return: wartość 0 lub 1
+        Funkcja decyduje o tym, czy zmieniamy stopy procentowe w danym miesiącu
+        """
+        return random.choice([0, 1])
+
+    def simulate_single_client_month(self, client_data: dict, interest_rate: float):
+        """
+        :param client_data: słownik z danymi klienta z poprzedniego miesiąca spłacania pożyczki
+        :return: dane klienta po aktualnym miesiącu
+        """
+        new_maintenance_cost = self.choose_maintenance_cost()
+        new_loan_installment = self.calc_loan_installment(client_data["amount"],
+                                                          client_data["months_loan_duration"], interest_rate)
+        new_client_data = deepcopy(client_data)
+        new_client_data["maintenance_cost"] = new_maintenance_cost
+        new_client_data["loan_installment"] = new_loan_installment
+        # warunek bankructwa
+        if (client_data["earnings_netto"] - new_maintenance_cost) / 2 <= new_loan_installment:
+            new_client_data["is_bankrupt"] = True
+        return new_client_data
+
+    def simulate(self, chosen_clients_data: list[dict]):
+        """
+        :param chosen_clients_data: lista słowników z danymi klientów, którzy dostali pożyczkę
+        :return: procent klientów, którzy zbankrutowali podczas spłaty pożyczki, zysk banku
+        Funkcja przeprowadza symulację spłacania pożyczki dla klientów banku, którzy ją otrzymali
+        Sposób 1 na bankruta: w momencie, gdy klient raz nie zapłaci raty, zostaje bankrutem
+        """
+        longest_months_loan_duration = max(client["months_loan_duration"] for client in chosen_clients_data)
+        bankrupts = 0
+        bank_income = 0
+        client_infos = []
+        # losuję tyle możliwych zmian stóp procentowych, ile najdłuższy okres kredytowania wśród klientów
+        possible_interest_rate_changes = [round(random.uniform(-1.0, 10.0), 2) for x in range(longest_months_loan_duration)]
+        for client_data in chosen_clients_data:
+            months_loan_duration = client_data["months_loan_duration"]
+            # informacje o kliencie w każdym miesiącu spłaty
+            loan_repayment_process_info = []
+            # zakładamy na początku, że klient nie jest bankrutem
+            is_bankrupt = False
+            for month in range(months_loan_duration):
+                interest_rate = self.interest_rate
+                # gdy funkcja wylosuje 1 zmieniamy stopę procentową w danym miesiącu, w przeciwnym razie nie zmieniamy
+                if self.toss_a_coin():
+                    interest_rate += random.choice(possible_interest_rate_changes)
+                new_client_data = self.simulate_single_client_month(client_data, interest_rate)
+                if new_client_data["is_bankrupt"]:
+                    is_bankrupt = True
+                loan_repayment_process_info.append(new_client_data)
+            if is_bankrupt:
+                bankrupts += 1
+            client_infos.append(loan_repayment_process_info)
+
+        return bankrupts
+
+    def simulate2(self, chosen_clients_data: list[dict]):
+        """
+        :param chosen_clients_data: lista słowników z danymi klientów, którzy dostali pożyczkę
+        :return: procent klientów, którzy zbankrutowali podczas spłaty pożyczki, zysk banku
+        Funkcja przeprowadza symulację spłacania pożyczki dla klientów banku, którzy ją otrzymali
+        Sposób 2 na bankruta: w momencie, gdy klient pierwszy raz nie zapłaci raty, zwiększamy mu ją o odsetki,
+        gdy nie zapłaci drugi raz, następna rata też jest z odsetkami, kiedy dalej nie zapłaci, staje się bankrutem
+        """
+        longest_months_loan_duration = max(client["months_loan_duration"] for client in chosen_clients_data)
+        bankrupts = 0
+        bank_income = 0
+        client_infos = []
+        # losuję tyle możliwych zmian stóp procentowych, ile najdłuższy okres kredytowania wśród klientów
+        possible_interest_rate_changes = [round(random.uniform(-1.0, 10.0), 2) for x in range(longest_months_loan_duration)]
+        for client_data in chosen_clients_data:
+            months_loan_duration = client_data["months_loan_duration"]
+            # informacje o kliencie w każdym miesiącu spłaty
+            loan_repayment_process_info = []
+            # zakładamy na początku, że klient nie jest bankrutem
+            is_bankrupt = False
+            # zliczamy niezapłacone raty
+            unpaid_installments = 0
+            for month in range(months_loan_duration):
+                interest_rate = self.interest_rate
+                # gdy funkcja wylosuje 1 zmieniamy stopę procentową w danym miesiącu, w przeciwnym razie nie zmieniamy
+                if self.toss_a_coin():
+                    interest_rate += random.choice(possible_interest_rate_changes)
+                # gdy klient nie zapłacił raty raz lub dwa, dostaje ratę z odsetkami 10%
+                if unpaid_installments == 1 or unpaid_installments == 2:
+                    interest_rate += interest_rate * 0.1
+                new_client_data = self.simulate_single_client_month(client_data, interest_rate)
+                if new_client_data["is_bankrupt"]:
+                    unpaid_installments += 1
+                    if unpaid_installments == 3:
+                        is_bankrupt = True
+                loan_repayment_process_info.append(new_client_data)
+            client_infos.append(loan_repayment_process_info)
+            if is_bankrupt:
+                bankrupts += 1
+        return bankrupts
+
 
 if __name__ == "__main__":
     DATAPATH = "data/credit.csv"
-    number_of_clients = 100
+    number_of_clients = 1000
     maintenance_cost_distribution = "normal"
-    interest_rate_distribution = "normal"
+    interest_rate_distribution = "gamma"
     bank_margin = 6.0
-    beginning_interest_rate = 0.5
+    beginning_interest_rate = 6.5
     # while number_of_clients is None:
     #     try:
     #         number_of_clients = int(input("Podaj ilość klientów: "))
@@ -84,8 +221,14 @@ if __name__ == "__main__":
     #         raise ValueError(f"Incorrect value given ({beginning_interest_rate}), expected float value")
 
     cdb = ClientDatabase(number_of_clients, maintenance_cost_distribution)
-    simulation = Simulation("normal", 6.0, 0.5)
-    possible_clients_data = cdb.prepare_entry_data(DATAPATH)
-    print(f"possible clients data: {len(possible_clients_data)}")
+    simulation = Simulation(interest_rate_distribution, maintenance_cost_distribution, bank_margin,
+                            beginning_interest_rate, number_of_clients)
+    possible_clients_data = cdb.prepare_entry_data(DATAPATH, number_of_clients)
+    print(f"possible clients data: {possible_clients_data}")
+    print("------")
     chosen_clients_data = simulation.choose_clients(possible_clients_data)
-    print(f"chosen clients data: {chosen_clients_data}")
+    print(f"chosen clients data: {len(chosen_clients_data)}")
+    print("------")
+    print(f"bankrupts (1st way): {simulation.simulate(chosen_clients_data)}")
+    # print("------")
+    print(f"bankrupts (2nd way): {simulation.simulate2(chosen_clients_data)}")
