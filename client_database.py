@@ -40,8 +40,8 @@ class ClientDatabase:
         """
         Funkcja pobiera dane z pliku credit.csv, który zawiera dane klienta: wiek (age), wysokość pożyczki (amount) oraz
         okres kredytowania w miesiącach (month_loan_duration).
-        Zarobki brutto klienta są losowane z rozkładu normalnego o parametrach średnia: 6857 zł, odchylenie std. 1200 zł
-        Zarobki netto klienta są wyliczane na podstawie podanych w prawie stawekw podatkowych (17% lub 32%).
+        Zarobki brutto klienta są losowane z rozkładu normalnego o parametrach średnia: 6857 zł, odchylenie std. 2000 zł
+        Zarobki netto klienta są wyliczane na podstawie podanych w prawie stawek podatkowych (17% lub 32%).
         Celem jest przygotowanie danych klienta na potrzeby podjęcia decyzji, czy przyznajemy pożyczkę
 
         """
@@ -76,4 +76,3 @@ class ClientDatabase:
             chosen_client_data["is_bankrupt"] = False
             self.clients.append(chosen_client_data)
         return [random.choice(self.clients) for x in range(number_of_clients)]
-

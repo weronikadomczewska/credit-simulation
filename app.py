@@ -97,7 +97,7 @@ class Simulation:
         Funkcja losuje tyle możliwych zmian stóp procentowych, ile najdłuższy okres kredytowania wśród klientów
         stopy procentowe są losowane z wybranego przez użytkownika rozkładu
         parametry rozkładów:
-        - jednostajny: wartość namniejsza 0%, wartość największa 18%
+        - jednostajny: wartość najmniejsza 0%, wartość największa 18%
         - normalny: średnia 7.38%, odchylenie std. 5.7%
         - gamma: shape: pierwiastek ze średniej, scale: odchylenie standardowe / pierwiastek ze średniej
         """
@@ -162,8 +162,7 @@ class Simulation:
             if is_bankrupt:
                 bankrupts += 1
             client_infos.append(loan_repayment_process_info)
-        return bankrupts
-
+        return bankrupts, round(sum(bank_incomes), 2)
     def simulate2(self, chosen_clients_data: list[dict]):
         """
         :param chosen_clients_data: lista słowników z danymi klientów, którzy dostali pożyczkę
@@ -203,14 +202,14 @@ class Simulation:
             client_infos.append(loan_repayment_process_info)
             if is_bankrupt:
                 bankrupts += 1
-        return bankrupts
+        return bankrupts, round(sum(bank_incomes), 2)
 
 
 if __name__ == "__main__":
     DATAPATH = "data/credit.csv"
     number_of_clients = 1000
-    maintenance_cost_distribution = "uniform"
-    interest_rate_distribution = "uniform"
+    maintenance_cost_distribution = "normal"
+    interest_rate_distribution = "normal"
     bank_margin = 6.0
     beginning_interest_rate = 6.5
     # while number_of_clients is None:
@@ -250,6 +249,8 @@ if __name__ == "__main__":
     chosen_clients_data = simulation.choose_clients(possible_clients_data)
     print(f"chosen clients data: {len(chosen_clients_data)}")
     print("------")
-    print(f"bankrupts (1st way): {simulation.simulate(chosen_clients_data)}")
+    print(f"bankrupts (1st way): {simulation.simulate(chosen_clients_data)[0]}")
+    print(f"total bank income: {simulation.simulate(chosen_clients_data)[1]}")
     print("------")
-    print(f"bankrupts (2nd way): {simulation.simulate2(chosen_clients_data)}")
+    print(f"bankrupts (2nd way): {simulation.simulate2(chosen_clients_data)[0]}")
+    print(f"total bank income: {simulation.simulate2(chosen_clients_data)[1]}")
